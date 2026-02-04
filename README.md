@@ -1,91 +1,139 @@
 
+# Project Plan: veloShare 
 
-# Project Plan: veloShare Application (React + Express)
+## 1. Final Goal
 
-## Final Goal
+Users should be able to:
 
-Devices connected to the same Wi-Fi network should be able to:
+* Open the veloShare website
+* Choose **Send** or **Receive**
+* Create or join a room (via code or link)
+* Sender selects a file
+* Receiver confirms the transfer
+* File transfers occur **peer-to-peer**
+* The server never stores the file
 
-* Discover each other
-* Choose Send or Receive mode
-* Select a target device
-* Send a file
-* Require receiver confirmation
-* Transfer the file successfully
+The system must work across:
+
+* Same Wi-Fi network
+* Different Wi-Fi networks
+* Different countries
 
 ---
 
-## Phase 0 – Foundation
+## 2. Architecture
+
+```
+React (Frontend)
+      ↓ WebSocket
+Express + Socket.IO (Signaling Server)
+      ↓ WebRTC
+Peer A  ←────────→  Peer B
+      (file stream)
+```
+
+**Server responsibilities:**
+
+* Room creation
+* Exchanging WebRTC signaling data (offers, answers, ICE candidates)
+
+**Client responsibilities:**
+
+* Establish peer-to-peer connection
+* Transfer file data directly between browsers
+
+No file data is stored or processed by the server.
+
+---
+
+## 3. Phase 0 – Foundation
 
 ### Step 0.1 – Project Setup
 
-Tasks:
+**Tasks:**
 
 * Create:
 
-  * `backend/` → Express application
-  * `frontend/` → React application
+  * `backend/` → Express + Socket.IO
+  * `frontend/` → React
 * Run both servers
-* Open frontend in browser
-* Confirm backend is reachable using LAN IP (not localhost)
+* Open frontend in a browser
+* Confirm backend is reachable from the browser
 
-Learning objectives:
+**Learning Objectives:**
 
 * Project structure
-* LAN access basics
+* Client–server communication
+* Local development environment setup
 
 ---
 
-## Phase 1 – Device Discovery (No file transfer)
+## 4. Phase 1 – Room and Peer Connection (No File Transfer)
 
 ### Step 1.1 – Socket Connection
 
-Each device:
+Each client:
 
 * Connects to backend using Socket.IO
-* Sends its device name (e.g., “Shujath-PC”)
+* Chooses:
 
-### Step 1.2 – Online Device List
+  * Create room
+  * Join room using a code
 
-Backend stores:
+Backend:
 
-* Socket ID
-* Device name
-
-Frontend displays:
-
-* List of connected devices
-
-Expected output:
-
-Available devices:
-
-* Laptop
-* Phone
-* Friend-PC
-
-Learning objectives:
-
-* WebSockets
-* Real-time UI updates
-* Client list management
+* Generates room IDs
+* Tracks socket IDs per room
 
 ---
 
-## Phase 2 – Send Request (No file transfer)
+### Step 1.2 – WebRTC Handshake
+
+Server handles signaling only:
+
+* `offer`
+* `answer`
+* `ice-candidate`
+
+Clients establish:
+
+```
+Peer A  ←→  Peer B
+(WebRTC data channel)
+```
+
+**Expected Output:**
+
+```
+Room connected  
+Peer joined  
+```
+
+**Learning Objectives:**
+
+* WebSocket signaling
+* WebRTC fundamentals
+* Peer connection lifecycle
+
+---
+
+## 5. Phase 2 – Send Request (No File Data)
 
 ### Step 2.1 – Send Intent
 
-Sender:
+Sender action:
 
-* Selects a device
-* Clicks “Send”
+```
+Send file
+```
 
-Backend emits:
+Backend emits to peer:
 
 ```
 incoming_request
 ```
+
+---
 
 ### Step 2.2 – Confirmation Dialog
 
@@ -95,30 +143,30 @@ Receiver sees:
 Shujath wants to send a file. Accept?
 ```
 
-Receiver can:
+Options:
 
 * Accept
 * Reject
+
+---
 
 ### Step 2.3 – Response Handling
 
 Receiver sends:
 
-```
-accepted / rejected
-```
+* `accepted` or `rejected`
 
 Sender UI updates accordingly.
 
-Learning objectives:
+**Learning Objectives:**
 
 * Event flow design
-* Request-response using sockets
+* Request–response signaling
 * UI state synchronization
 
 ---
 
-## Phase 3 – File Selection (Metadata only)
+## 6. Phase 3 – File Selection (Metadata Only)
 
 ### Step 3.1 – File Picker
 
@@ -126,10 +174,13 @@ Sender selects a file and displays:
 
 * Filename
 * File size
+* File type
+
+---
 
 ### Step 3.2 – Metadata Transmission
 
-Send only:
+Metadata sent via signaling:
 
 * Name
 * Size
@@ -142,31 +193,37 @@ Incoming: photo.png (2.4 MB)
 Accept?
 ```
 
-Learning objectives:
+**Learning Objectives:**
 
-* File APIs
+* File API usage
 * Metadata handling
 * User experience flow
 
 ---
 
-## Phase 4 – File Transfer
+## 7. Phase 4 – File Transfer (WebRTC)
 
-### Step 4.1 – HTTP Upload
+### Step 4.1 – Data Channel Transfer
 
-Sender uploads file to receiver endpoint:
+Sender:
 
-```
-POST /upload
-```
+* Splits file into chunks
+* Sends chunks via WebRTC data channel
 
-### Step 4.2 – File Storage
+Receiver:
 
-Receiver saves file to:
+* Reassembles file from chunks
 
-```
-/downloads
-```
+---
+
+### Step 4.2 – Save File
+
+Receiver:
+
+* Creates a Blob
+* Triggers browser download
+
+---
 
 ### Step 4.3 – Completion Messages
 
@@ -182,106 +239,95 @@ Sender:
 Transfer complete
 ```
 
-Learning objectives:
+**Learning Objectives:**
 
-* Multipart uploads
-* File streams
-* Disk writing
-* Memory safety
+* Streaming binary data
+* Chunking strategies
+* Memory management
+* Peer-to-peer transfer mechanics
 
 ---
 
-## Phase 5 – Progress and UX
+## 8. Phase 5 – Progress and User Experience
 
 ### Step 5.1 – Progress Bar
 
-Display transfer percentage during upload.
+Display:
+
+* Percentage completed
+* Transfer speed (optional)
+
+---
 
 ### Step 5.2 – Error Handling
 
-Handle cases:
+Handle:
 
-* Device disconnects
-* Request rejected
-* Transfer failure
+* Peer disconnection
+* Rejected requests
+* Interrupted transfers
 
-Learning objectives:
+**Learning Objectives:**
 
-* Asynchronous UX
-* Failure states
+* Asynchronous UI updates
+* Failure state management
 * Recovery logic
 
 ---
 
-## Phase 6 – Basic Safety
+## 9. Phase 6 – Basic Safety
 
 ### Step 6.1 – Validation
 
-* Maximum file size
+* Maximum file size limits
 * Allowed file types
-
-### Step 6.2 – Transfer Token
-
-* Use random token to prevent incorrect device uploads
-
-Learning objectives:
-
-* Security mindset
-* Trust boundaries
 
 ---
 
-## Phase 7 – Polish
+### Step 6.2 – Room Security
 
-Optional enhancements:
+* Randomized room codes
+* Single-use sessions
 
-* Device rename
+**Learning Objectives:**
+
+* Security awareness
+* Trust boundary design
+
+---
+
+## 10. Phase 7 – Optional Enhancements
+
+* Drag and drop support
 * Dark mode
-* Drag and drop
+* QR code for room links
 * Transfer history
 
 ---
 
-## Exclusions (Initial Version)
+## 11. Exclusions (Initial Version)
 
-The following will not be implemented initially:
+Not implemented:
 
-* WebRTC
+* LAN scanning
 * Encryption
-* Cloud services
-* Accounts
-* Databases
+* User accounts
+* Database
+* Cloud storage
 
 Scope includes only:
 
-* LAN
-* Files
-* Devices
-* Confirmations
+* Browser-based application
+* Peer-to-peer file transfer
+* Room-based connections
+* User confirmation flow
 
 ---
 
-## Development Rules
+## 12. Development Rules
 
 * Implement one phase at a time
-* Build first, then expand
-* Debug before proceeding
-* No skipping phases
-
----
-
-## Next Step: Phase 0
-
-If you say:
-
-“Start Phase 0”
-
-The next response will include:
-
-* Exact folder structure
-* Commands
-* Minimal Express server
-* Minimal React app
-* Instructions to run both
-
+* Do not skip phases
+* Each phase must function correctly before proceeding
+* Debug issues before adding new features
 

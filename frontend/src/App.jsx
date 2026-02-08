@@ -20,29 +20,38 @@ const handleFileSelect = (e) => {
   fileRef.current = e.target.files[0];
 };
 
+const CHUNK_SIZE = 64 * 1024; // 64KB
+
 const sendFile = async () => {
-  if (!dataChannelRef.current || 
-    dataChannelRef.current.readyState !== "open") {
-  console.log("Data channel not ready");
-  return;
-}
+  const file = fileRef.current;
+  const channel = dataChannelRef.current;
 
-  if (!fileRef.current) return;
+  if (!file || !channel) return;
 
-  const buffer = await fileRef.current.arrayBuffer();
-
-  // send metadata first
-  dataChannelRef.current.send(JSON.stringify({
+  // send metadata
+  channel.send(JSON.stringify({
     type: "file-info",
-    name: fileRef.current.name,
-    size: fileRef.current.size
+    name: file.name,
+    size: file.size
   }));
 
-  // send file data
-  dataChannelRef.current.send(buffer);
+  let offset = 0;
+
+  while (offset < file.size) {
+    const slice = file.slice(offset, offset + CHUNK_SIZE);
+    const buffer = await slice.arrayBuffer();
+
+    channel.send(buffer);
+    offset += CHUNK_SIZE;
+  }
+
+  channel.send(JSON.stringify({ type: "file-end" }));
 
   console.log("File sent");
 };
+
+
+
 
 const handleIncomingData = (event) => {
   if (typeof event.data === "string") {
@@ -51,20 +60,24 @@ const handleIncomingData = (event) => {
     if (msg.type === "file-info") {
       receivedBuffersRef.current = [];
       incomingFileRef.current = msg;
-      console.log("Receiving file:", msg.name);
     }
-  } else {
-    receivedBuffersRef.current.push(event.data);
 
-    const blob = new Blob(receivedBuffersRef.current);
+    if (msg.type === "file-end") {
+      const blob = new Blob(receivedBuffersRef.current);
+      const url = URL.createObjectURL(blob);
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = incomingFileRef.current?.name || "received_file";
-    a.click();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = incomingFileRef.current.name;
+      a.click();
+    }
+
+    return;
   }
+
+  receivedBuffersRef.current.push(event.data);
 };
+
 
 
 

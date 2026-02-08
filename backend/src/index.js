@@ -44,15 +44,15 @@ io.on("connection", (socket)=>{
   })
 
   socket.on("offer", ({roomId, offer})=>{
-    socket.to(roomId).emit("offer", offer);
+    socket.to(roomId).emit("offer", {roomId,offer});
   })
 
   socket.on("answer", ({roomId, answer})=>{
-    socket.to(roomId).emit("answer", answer);
+    socket.to(roomId).emit("answer", {roomId, answer});
   })
 
   socket.on("ice-candidate", ({ roomId, candidate }) => {
-    socket.to(roomId).emit("ice-candidate", candidate);
+    socket.to(roomId).emit("ice-candidate", {roomId, candidate});
   })
 
   socket.on("disconnect", ()=>{

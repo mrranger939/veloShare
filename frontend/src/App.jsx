@@ -11,6 +11,63 @@ function App() {
   const [roomId, setRoomId] = useState("");
   const [joinedRoom, setJoinedRoom] = useState("");
   const [status, setStatus] = useState("Idle");
+const fileRef = useRef(null);
+const receivedBuffersRef = useRef([]);
+const incomingFileRef = useRef(null);
+
+
+const handleFileSelect = (e) => {
+  fileRef.current = e.target.files[0];
+};
+
+const sendFile = async () => {
+  if (!dataChannelRef.current || 
+    dataChannelRef.current.readyState !== "open") {
+  console.log("Data channel not ready");
+  return;
+}
+
+  if (!fileRef.current) return;
+
+  const buffer = await fileRef.current.arrayBuffer();
+
+  // send metadata first
+  dataChannelRef.current.send(JSON.stringify({
+    type: "file-info",
+    name: fileRef.current.name,
+    size: fileRef.current.size
+  }));
+
+  // send file data
+  dataChannelRef.current.send(buffer);
+
+  console.log("File sent");
+};
+
+const handleIncomingData = (event) => {
+  if (typeof event.data === "string") {
+    const msg = JSON.parse(event.data);
+
+    if (msg.type === "file-info") {
+      receivedBuffersRef.current = [];
+      incomingFileRef.current = msg;
+      console.log("Receiving file:", msg.name);
+    }
+  } else {
+    receivedBuffersRef.current.push(event.data);
+
+    const blob = new Blob(receivedBuffersRef.current);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = incomingFileRef.current?.name || "received_file";
+    a.click();
+  }
+};
+
+
+
 
   useEffect(() => {
     const socket = io(BACKEND_URL);
@@ -102,28 +159,33 @@ function App() {
 
 
     // OFFERER creates data channel
-    if (isOfferer) {
-      const channel = pc.createDataChannel("data");
+if (isOfferer) {
+  const channel = pc.createDataChannel("data");
 
-      channel.onopen = () => {
-        console.log("Data channel open");
-        setStatus("Connected");
-      };
+  channel.onopen = () => {
+    console.log("Data channel open");
+    setStatus("Connected");
+  };
 
-      dataChannelRef.current = channel;
-    }
+  channel.onmessage = handleIncomingData;
+
+  dataChannelRef.current = channel;
+}
+
 
     // RECEIVER gets data channel
-    pc.ondatachannel = (event) => {
-      const channel = event.channel;
+pc.ondatachannel = (event) => {
+  const channel = event.channel;
 
-      channel.onopen = () => {
-        console.log("Data channel open");
-        setStatus("Connected");
-      };
+  channel.onopen = () => {
+    console.log("Data channel open");
+    setStatus("Connected");
+  };
 
-      dataChannelRef.current = channel;
-    };
+  channel.onmessage = handleIncomingData;
+
+  dataChannelRef.current = channel;
+};
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -169,6 +231,9 @@ function App() {
 
       <h3>Status: {status}</h3>
       {joinedRoom && <p>Room: {joinedRoom}</p>}
+      <input type="file" onChange={handleFileSelect} />
+      <button onClick={sendFile}>Send File</button>
+
     </div>
   );
 }
